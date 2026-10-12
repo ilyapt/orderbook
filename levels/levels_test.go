@@ -93,6 +93,8 @@ func TestOrderLifecycle(t *testing.T) {
 	require.Equal(t, uint64(50), l.levels[lvlIdx].totalQty)
 	checkInvariants(t, l)
 
+	require.PanicsWithValue(t, "levels: Fill: qty exceeds order remainder", func() { l.Fill(oh, 150) })
+
 	li, empty = l.Fill(oh, 50)
 	require.True(t, empty)
 	require.Equal(t, lvlIdx, li)
@@ -109,8 +111,18 @@ func TestOrderLifecycle(t *testing.T) {
 
 	checkInvariants(t, l)
 
+	ln := len(l.orders)
+	ls := l.seq
+	oh3, err := l.Push(lvlIdx, 0)
+	require.ErrorIs(t, err, ErrZeroQty)
+	require.Equal(t, NoHandle, oh3)
+	require.Equal(t, ls, l.seq)
+	require.Len(t, l.orders, ln)
+
 	li, empty, err = l.Cancel(oh)
 	require.ErrorIs(t, err, ErrNotFound)
+
+	require.PanicsWithValue(t, "levels: Fill: stale handle", func() { l.Fill(oh, 100) })
 
 	li, empty, err = l.Cancel(oh2)
 	require.NoError(t, err)
@@ -159,4 +171,103 @@ func TestQueueOrderAfterRemovals(t *testing.T) {
 	require.True(t, empty)
 	require.Equal(t, lvlIdx, li)
 	checkInvariants(t, l)
+}
+
+func TestLevelsReuse(t *testing.T) {
+	l := New(10, 10)
+	lvl1 := l.NewLevel(100)
+	lvl2 := l.NewLevel(200)
+
+	o1, err := l.Push(lvl1, 10)
+	require.NoError(t, err)
+	o2, err := l.Push(lvl2, 20)
+	require.NoError(t, err)
+	checkInvariants(t, l)
+
+	li, empty, err := l.Cancel(o1)
+	require.NoError(t, err)
+	require.True(t, empty)
+	require.Equal(t, lvl1, li)
+	checkInvariants(t, l)
+
+	l.FreeLevel(lvl1)
+	require.Equal(t, int32(-2), l.levels[lvl1].tail)
+	require.Equal(t, int32(lvl1), l.freeLevel)
+	checkInvariants(t, l)
+
+	require.PanicsWithValue(t, "levels: FreeLevel: level already freed", func() { l.FreeLevel(lvl1) })
+
+	require.PanicsWithValue(t, "levels: FreeLevel: level is not empty", func() { l.FreeLevel(lvl2) })
+
+	require.PanicsWithValue(t, "levels: Push: level is freed", func() { l.Push(lvl1, 100) })
+
+	li, empty, err = l.Cancel(o2)
+	require.NoError(t, err)
+	require.True(t, empty)
+	require.Equal(t, lvl2, li)
+	checkInvariants(t, l)
+
+	l.FreeLevel(lvl2)
+	require.Equal(t, int32(-2), l.levels[lvl2].tail)
+	require.Equal(t, int32(lvl1), l.levels[lvl2].head)
+	require.Equal(t, int32(lvl2), l.freeLevel)
+	checkInvariants(t, l)
+
+	lvl3 := l.NewLevel(300)
+	require.Equal(t, lvl2, lvl3)
+	require.Equal(t, uint64(300), l.levels[lvl3].price)
+	require.Equal(t, uint64(0), l.levels[lvl3].totalQty)
+	require.Equal(t, int32(-1), l.levels[lvl3].head)
+	require.Equal(t, int32(-1), l.levels[lvl3].tail)
+	require.Equal(t, int32(lvl1), l.freeLevel)
+	checkInvariants(t, l)
+
+	o3, err := l.Push(lvl3, 10)
+	require.NoError(t, err)
+	require.Equal(t, uint64(10), l.levels[lvl3].totalQty)
+	require.Equal(t, o3.index(), l.levels[lvl3].head)
+	require.Equal(t, o3.index(), l.levels[lvl3].tail)
+	checkInvariants(t, l)
+
+	lvl4 := l.NewLevel(400)
+	require.Equal(t, lvl1, lvl4)
+	require.Equal(t, uint64(400), l.levels[lvl4].price)
+	require.Equal(t, uint64(0), l.levels[lvl4].totalQty)
+	require.Equal(t, int32(-1), l.levels[lvl4].head)
+	require.Equal(t, int32(-1), l.levels[lvl4].tail)
+	require.Equal(t, int32(-1), l.freeLevel)
+	require.Len(t, l.levels, 2)
+	checkInvariants(t, l)
+
+	lvl5 := l.NewLevel(500)
+	require.Equal(t, LevelIndex(2), lvl5)
+	require.Equal(t, uint64(500), l.levels[lvl5].price)
+	require.Equal(t, uint64(0), l.levels[lvl5].totalQty)
+	require.Equal(t, int32(-1), l.levels[lvl5].head)
+	require.Equal(t, int32(-1), l.levels[lvl5].tail)
+	require.Equal(t, int32(-1), l.freeLevel)
+	require.Len(t, l.levels, 3)
+	checkInvariants(t, l)
+}
+
+func TestHandlePacking(t *testing.T) {
+	require.Equal(t, Handle(1<<indexBits), makeHandle(0, 1))
+	require.Equal(t, Handle(1<<indexBits|indexMask), makeHandle(indexMask, 1))
+	require.Equal(t, Handle(seqMax<<indexBits), makeHandle(0, seqMax))
+	require.Equal(t, Handle(seqMax<<indexBits|indexMask), makeHandle(indexMask, seqMax))
+
+	h := Handle(seqMax<<indexBits | indexMask)
+	require.Equal(t, int32(indexMask), h.index())
+	require.Equal(t, uint64(seqMax), h.seq())
+
+	h = Handle(1<<indexBits | indexMask)
+	require.Equal(t, int32(indexMask), h.index())
+	require.Equal(t, uint64(1), h.seq())
+
+	h = Handle(seqMax << indexBits)
+	require.Equal(t, int32(0), h.index())
+	require.Equal(t, uint64(seqMax), h.seq())
+
+	require.Equal(t, int32(0), NoHandle.index())
+	require.Equal(t, uint64(0), NoHandle.seq())
 }

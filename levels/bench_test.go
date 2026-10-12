@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"math/rand"
 	"runtime"
+	"strconv"
 	"testing"
 
 	"orderbook/levels"
@@ -13,10 +14,14 @@ import (
 //
 //	go test -run '^$' -bench . -benchmem -count 3 ./levels
 //
-// Scenario 1 (Push) and 2 (Cancel) report per-batch numbers plus a
-// derived ns/push or ns/cancel metric. Scenario 4 (Steady) reports per
-// operation (one cancel + one push) and GC activity during the timed
-// section for a given number of live orders.
+// b.N is always a number of operations, so ns/op is directly ns/push,
+// ns/cancel or ns/(cancel+push). Scenario 1 (Push) and 2 (Cancel) run in
+// batches of `batch` operations on a fresh structure each, rebuilt outside
+// the timer: the arena index is 24-bit and b.N can reach hundreds of
+// millions, so one structure for all of b.N would overflow it and eat
+// gigabytes. Scenario 3 (Steady) keeps a fixed number of live orders; each
+// op is one cancel plus one push, and GC activity during the timed section
+// is reported per operation.
 
 // Reference implementation of the levels layer built the idiomatic way:
 // container/list per level plus a map from order id to the list element
@@ -118,86 +123,89 @@ func newRef(ordersCap int) (*ref, []int) {
 	return r, lv
 }
 
-func perOp(b *testing.B, ops int, name string) {
-	b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(b.N)/float64(ops), name)
+func shuffle[T any](s []T) {
+	rand.New(rand.NewSource(2)).Shuffle(len(s), func(a, c int) { s[a], s[c] = s[c], s[a] })
 }
 
-// Scenario 1: push a batch of orders onto random pre-existing levels.
+// Scenario 1: push orders onto random pre-existing levels, `batch` at a
+// time onto a fresh structure.
 func BenchmarkPush(b *testing.B) {
 	b.Run("levels", func(b *testing.B) {
 		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
+		for i := 0; i < b.N; i += batch {
+			n := min(batch, b.N-i)
 			b.StopTimer()
-			l, lv := newLevels(batch)
+			l, lv := newLevels(n)
 			b.StartTimer()
-			for j := 0; j < batch; j++ {
+			for j := 0; j < n; j++ {
 				h, _ := l.Push(lv[rnd[j&rndMask]%numLevels], 1)
 				sinkHandle += h
 			}
 		}
-		perOp(b, batch, "ns/push")
 	})
 	b.Run("ref", func(b *testing.B) {
 		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
+		for i := 0; i < b.N; i += batch {
+			n := min(batch, b.N-i)
 			b.StopTimer()
-			r, lv := newRef(batch)
+			r, lv := newRef(n)
 			b.StartTimer()
-			for j := 0; j < batch; j++ {
+			for j := 0; j < n; j++ {
 				sinkID += r.Push(lv[rnd[j&rndMask]%numLevels], 1)
 			}
 		}
-		perOp(b, batch, "ns/push")
 	})
 }
 
-// Scenario 2: cancel a batch of resting orders in random order.
+// Scenario 2: cancel resting orders in random order, `batch` at a time on
+// a fresh structure.
 func BenchmarkCancel(b *testing.B) {
 	b.Run("levels", func(b *testing.B) {
 		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
+		for i := 0; i < b.N; i += batch {
+			n := min(batch, b.N-i)
 			b.StopTimer()
-			l, lv := newLevels(batch)
-			hs := make([]levels.Handle, batch)
+			l, lv := newLevels(n)
+			hs := make([]levels.Handle, n)
 			for j := range hs {
 				hs[j], _ = l.Push(lv[rnd[j&rndMask]%numLevels], 1)
 			}
-			rand.New(rand.NewSource(2)).Shuffle(len(hs), func(a, c int) { hs[a], hs[c] = hs[c], hs[a] })
+			shuffle(hs)
 			b.StartTimer()
 			for _, h := range hs {
 				lvl, _, _ := l.Cancel(h)
 				sinkLevel += int(lvl)
 			}
 		}
-		perOp(b, batch, "ns/cancel")
 	})
 	b.Run("ref", func(b *testing.B) {
 		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
+		for i := 0; i < b.N; i += batch {
+			n := min(batch, b.N-i)
 			b.StopTimer()
-			r, lv := newRef(batch)
-			ids := make([]uint64, batch)
+			r, lv := newRef(n)
+			ids := make([]uint64, n)
 			for j := range ids {
 				ids[j] = r.Push(lv[rnd[j&rndMask]%numLevels], 1)
 			}
-			rand.New(rand.NewSource(2)).Shuffle(len(ids), func(a, c int) { ids[a], ids[c] = ids[c], ids[a] })
+			shuffle(ids)
 			b.StartTimer()
 			for _, id := range ids {
 				lvl, _, _ := r.Cancel(id)
 				sinkLevel += lvl
 			}
 		}
-		perOp(b, batch, "ns/cancel")
 	})
 }
 
-// Scenario 4: steady state. Keep `live` orders resting; each op cancels a
+// Scenario 3: steady state. Keep `live` orders resting; each op cancels a
 // random one and pushes a replacement onto a random level. GC count and
-// pause time during the timed section are reported as extra metrics.
+// pause time during the timed section are reported per operation.
 func BenchmarkSteady(b *testing.B) {
 	for _, live := range []int{10_000, 100_000, 1_000_000} {
 		live := live
-		b.Run("levels/live="+itoa(live), func(b *testing.B) {
+		name := "live=" + strconv.Itoa(live)
+		b.Run("levels/"+name, func(b *testing.B) {
 			l, lv := newLevels(live)
 			hs := make([]levels.Handle, live)
 			for j := range hs {
@@ -218,7 +226,7 @@ func BenchmarkSteady(b *testing.B) {
 			runtime.ReadMemStats(&after)
 			reportGC(b, &before, &after)
 		})
-		b.Run("ref/live="+itoa(live), func(b *testing.B) {
+		b.Run("ref/"+name, func(b *testing.B) {
 			r, lv := newRef(live)
 			ids := make([]uint64, live)
 			for j := range ids {
@@ -242,19 +250,10 @@ func BenchmarkSteady(b *testing.B) {
 	}
 }
 
+// reportGC normalises GC activity per benchmark operation so that runs with
+// different b.N are comparable.
 func reportGC(b *testing.B, before, after *runtime.MemStats) {
-	b.ReportMetric(float64(after.NumGC-before.NumGC), "gcs")
-	b.ReportMetric(float64(after.PauseTotalNs-before.PauseTotalNs)/1e6, "gc-pause-ms")
-}
-
-func itoa(n int) string {
-	switch n {
-	case 10_000:
-		return "10k"
-	case 100_000:
-		return "100k"
-	case 1_000_000:
-		return "1m"
-	}
-	return "?"
+	n := float64(b.N)
+	b.ReportMetric(float64(after.NumGC-before.NumGC)/n*1e6, "gcs/Mop")
+	b.ReportMetric(float64(after.PauseTotalNs-before.PauseTotalNs)/n, "gc-pause-ns/op")
 }
