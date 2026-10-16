@@ -101,7 +101,7 @@ func TestOrderLifecycle(t *testing.T) {
 	require.Equal(t, uint64(0), l.levels[lvlIdx].totalQty)
 	checkInvariants(t, l)
 
-	li, empty, err = l.Cancel(oh)
+	_, _, err = l.Cancel(oh)
 	require.ErrorIs(t, err, ErrNotFound)
 
 	oh2, err := l.Push(lvlIdx, 10)
@@ -119,7 +119,7 @@ func TestOrderLifecycle(t *testing.T) {
 	require.Equal(t, ls, l.seq)
 	require.Len(t, l.orders, ln)
 
-	li, empty, err = l.Cancel(oh)
+	_, _, err = l.Cancel(oh)
 	require.ErrorIs(t, err, ErrNotFound)
 
 	require.PanicsWithValue(t, "levels: Fill: stale handle", func() { l.Fill(oh, 100) })
@@ -199,7 +199,7 @@ func TestLevelsReuse(t *testing.T) {
 
 	require.PanicsWithValue(t, "levels: FreeLevel: level is not empty", func() { l.FreeLevel(lvl2) })
 
-	require.PanicsWithValue(t, "levels: level is freed", func() { l.Push(lvl1, 100) })
+	require.PanicsWithValue(t, "levels: level is freed", func() { _, _ = l.Push(lvl1, 100) })
 
 	li, empty, err = l.Cancel(o2)
 	require.NoError(t, err)

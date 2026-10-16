@@ -58,7 +58,7 @@ func TestGetters(t *testing.T) {
 	require.ErrorIs(t, err, ErrNotFound)
 	require.Equal(t, LevelIndex(0), li)
 
-	li, empty, err = l.Cancel(o2)
+	_, empty, err = l.Cancel(o2)
 	require.NoError(t, err)
 	require.True(t, empty)
 	require.Equal(t, uint64(0), l.TotalQty(lvl))
