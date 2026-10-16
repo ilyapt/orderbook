@@ -13,11 +13,7 @@ func (l *Levels) Push(level LevelIndex, qty uint64) (Handle, error) {
 		return NoHandle, ErrZeroQty
 	}
 
-	lvl := &l.levels[level]
-
-	if lvl.tail == -2 {
-		panic("levels: Push: level is freed")
-	}
+	lvl := l.getLevel(level)
 
 	if l.seq == seqMax {
 		panic("levels: Push: seq exhausted")
@@ -110,7 +106,7 @@ func (l *Levels) get(h Handle) (int32, *order, error) {
 		return 0, nil, ErrNotFound
 	}
 	o := &l.orders[index]
-	if o.level < 0 || o.seq != h.seq() {
+	if o.level < 0 || o.seq != h.Seq() {
 		return 0, nil, ErrNotFound
 	}
 	return index, o, nil

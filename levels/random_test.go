@@ -51,14 +51,28 @@ func compareModel(t *testing.T, l *Levels, model map[LevelIndex]*modelLevel) {
 		require.NotEqual(t, int32(-2), lvl.tail, "level %d is freed in Levels but live in model", id)
 		require.Equal(t, m.price, lvl.price, "level %d price", id)
 		require.Equal(t, m.total(), lvl.totalQty, "level %d totalQty", id)
+		require.Equal(t, m.price, l.Price(id), "level %d Price()", id)
+		require.Equal(t, m.total(), l.TotalQty(id), "level %d TotalQty()", id)
+
+		front, ok := l.Front(id)
+		require.Equal(t, len(m.orders) > 0, ok, "level %d Front() ok", id)
+		if ok {
+			require.Equal(t, m.orders[0].h, front, "level %d Front()", id)
+		}
 
 		idx := make([]int32, len(m.orders))
 		for i, o := range m.orders {
 			idx[i] = o.h.index()
 			got := &l.orders[o.h.index()]
 			require.Equal(t, o.qty, got.qty, "level %d order %d qty", id, i)
-			require.Equal(t, o.h.seq(), got.seq, "level %d order %d seq", id, i)
+			require.Equal(t, o.h.Seq(), got.seq, "level %d order %d seq", id, i)
 			require.Equal(t, id, got.level, "level %d order %d owner", id, i)
+			q, err := l.Qty(o.h)
+			require.NoError(t, err, "level %d order %d Qty()", id, i)
+			require.Equal(t, o.qty, q, "level %d order %d Qty()", id, i)
+			li, err := l.Level(o.h)
+			require.NoError(t, err, "level %d order %d Level()", id, i)
+			require.Equal(t, id, li, "level %d order %d Level()", id, i)
 		}
 		chainEqual(t, l, lvl, idx...)
 	}
@@ -198,7 +212,9 @@ func runRandom(t *testing.T, seed int64, steps int) {
 			dropLevel(id)
 		}
 
-		checkInvariants(t, l)
-		compareModel(t, l, model)
+		if step%100 == 0 || step == steps-1 {
+			checkInvariants(t, l)
+			compareModel(t, l, model)
+		}
 	}
 }

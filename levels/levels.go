@@ -24,7 +24,7 @@ func makeHandle(index int32, seq uint64) Handle {
 }
 
 func (h Handle) index() int32 { return int32(uint64(h) & indexMask) }
-func (h Handle) seq() uint64  { return uint64(h) >> indexBits }
+func (h Handle) Seq() uint64  { return uint64(h) >> indexBits }
 
 type LevelIndex int32
 

@@ -84,7 +84,7 @@ func TestOrderLifecycle(t *testing.T) {
 	oh, err := l.Push(lvlIdx, 100)
 	require.NoError(t, err)
 	checkInvariants(t, l)
-	require.Equal(t, uint64(1), oh.seq())
+	require.Equal(t, uint64(1), oh.Seq())
 	require.Equal(t, int32(0), oh.index())
 
 	li, empty := l.Fill(oh, 50)
@@ -107,7 +107,7 @@ func TestOrderLifecycle(t *testing.T) {
 	oh2, err := l.Push(lvlIdx, 10)
 	require.NoError(t, err)
 	require.Equal(t, oh.index(), oh2.index())
-	require.Equal(t, uint64(2), oh2.seq())
+	require.Equal(t, uint64(2), oh2.Seq())
 
 	checkInvariants(t, l)
 
@@ -199,7 +199,7 @@ func TestLevelsReuse(t *testing.T) {
 
 	require.PanicsWithValue(t, "levels: FreeLevel: level is not empty", func() { l.FreeLevel(lvl2) })
 
-	require.PanicsWithValue(t, "levels: Push: level is freed", func() { l.Push(lvl1, 100) })
+	require.PanicsWithValue(t, "levels: level is freed", func() { l.Push(lvl1, 100) })
 
 	li, empty, err = l.Cancel(o2)
 	require.NoError(t, err)
@@ -258,16 +258,16 @@ func TestHandlePacking(t *testing.T) {
 
 	h := Handle(seqMax<<indexBits | indexMask)
 	require.Equal(t, int32(indexMask), h.index())
-	require.Equal(t, uint64(seqMax), h.seq())
+	require.Equal(t, uint64(seqMax), h.Seq())
 
 	h = Handle(1<<indexBits | indexMask)
 	require.Equal(t, int32(indexMask), h.index())
-	require.Equal(t, uint64(1), h.seq())
+	require.Equal(t, uint64(1), h.Seq())
 
 	h = Handle(seqMax << indexBits)
 	require.Equal(t, int32(0), h.index())
-	require.Equal(t, uint64(seqMax), h.seq())
+	require.Equal(t, uint64(seqMax), h.Seq())
 
 	require.Equal(t, int32(0), NoHandle.index())
-	require.Equal(t, uint64(0), NoHandle.seq())
+	require.Equal(t, uint64(0), NoHandle.Seq())
 }
