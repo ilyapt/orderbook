@@ -17,8 +17,31 @@ type side struct {
 }
 
 func (s *side) find(price uint64) (int, bool) {
+	n := len(s.levels)
+	if n == 0 {
+		return 0, false
+	}
 
-	l, r := 0, len(s.levels)-1
+	r := n - 1
+	if s.levels[r].price == price {
+		return r, true
+	}
+	if (s.bid && s.levels[r].price < price) ||
+		(!s.bid && s.levels[r].price > price) {
+		return n, false
+	}
+
+	l, step := r, 1
+	for l >= 0 && ((s.bid && s.levels[l].price > price) ||
+		(!s.bid && s.levels[l].price < price)) {
+		r = l
+		l -= step
+		step <<= 1
+	}
+	if l < 0 {
+		l = 0
+	}
+
 	for l <= r {
 		m := l + (r-l)/2
 		if s.levels[m].price == price {
