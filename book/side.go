@@ -1,8 +1,9 @@
 package book
 
 import (
-	"orderbook/levels"
 	"slices"
+
+	"orderbook/levels"
 )
 
 type level struct {
