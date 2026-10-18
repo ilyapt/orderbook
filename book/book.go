@@ -29,13 +29,13 @@ func (b *Book) Add(s Side, price, qty uint64) (levels.Handle, error) {
 	}
 	sd := b.side(s)
 
-	i, found := sd.find(price)
+	i, found := sd.find(b.levels, price)
 	if found {
-		return b.levels.Push(sd.levels[i].lvl, qty)
+		return b.levels.Push(sd.levels[i], qty)
 	}
 
 	lvl := b.levels.NewLevel(price)
-	sd.insertAt(i, price, lvl)
+	sd.insertAt(i, lvl)
 	return b.levels.Push(lvl, qty)
 }
 
@@ -60,15 +60,15 @@ func (b *Book) Cancel(h levels.Handle) error {
 
 	price := b.levels.Price(idx)
 
-	i, found := b.bids.find(price)
-	if found && b.bids.levels[i].lvl == idx {
+	i, found := b.bids.find(b.levels, price)
+	if found && b.bids.levels[i] == idx {
 		b.bids.removeAt(i)
 		b.levels.FreeLevel(idx)
 		return nil
 	}
 
-	i, found = b.asks.find(price)
-	if found && b.asks.levels[i].lvl == idx {
+	i, found = b.asks.find(b.levels, price)
+	if found && b.asks.levels[i] == idx {
 		b.asks.removeAt(i)
 		b.levels.FreeLevel(idx)
 		return nil
@@ -84,5 +84,5 @@ func (b *Book) Best(s Side) (price, totalQty uint64, ok bool) {
 		return 0, 0, false
 	}
 
-	return l.price, b.levels.TotalQty(l.lvl), true
+	return b.levels.Price(l), b.levels.TotalQty(l), true
 }
