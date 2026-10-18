@@ -9,6 +9,13 @@ const (
 	Sell
 )
 
+func (s Side) Opposite() Side {
+	if s == Buy {
+		return Sell
+	}
+	return Buy
+}
+
 type Book struct {
 	levels *levels.Levels
 	bids   side
@@ -39,42 +46,26 @@ func (b *Book) Add(s Side, price, qty uint64) (levels.Handle, error) {
 	return b.levels.Push(lvl, qty)
 }
 
-func (b *Book) side(s Side) *side {
-	switch s {
-	case Buy:
-		return &b.bids
-	case Sell:
-		return &b.asks
+func (b *Book) LevelAt(s Side, depth int) (price, totalQty uint64, ok bool) {
+	sd := b.side(s)
+	i := len(sd.levels) - 1 - depth
+	if i < 0 {
+		return 0, 0, false
 	}
-	panic("book: invalid side")
+	l := sd.levels[i]
+	return b.levels.Price(l), b.levels.TotalQty(l), true
 }
 
-func (b *Book) Cancel(h levels.Handle) error {
-	idx, _, empty, err := b.levels.Cancel(h)
+func (b *Book) Cancel(h levels.Handle) (uint64, error) {
+	idx, remaining, empty, err := b.levels.Cancel(h)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	if !empty {
-		return nil
-	}
-
-	price := b.levels.Price(idx)
-
-	i, found := b.bids.find(b.levels, price)
-	if found && b.bids.levels[i] == idx {
-		b.bids.removeAt(i)
-		b.levels.FreeLevel(idx)
-		return nil
+	if empty {
+		b.dropLevel(idx)
 	}
 
-	i, found = b.asks.find(b.levels, price)
-	if found && b.asks.levels[i] == idx {
-		b.asks.removeAt(i)
-		b.levels.FreeLevel(idx)
-		return nil
-	}
-
-	panic("book: level missing from side")
+	return remaining, nil
 }
 
 func (b *Book) Best(s Side) (price, totalQty uint64, ok bool) {
@@ -85,4 +76,58 @@ func (b *Book) Best(s Side) (price, totalQty uint64, ok bool) {
 	}
 
 	return b.levels.Price(l), b.levels.TotalQty(l), true
+}
+
+func (b *Book) Front(s Side) (h levels.Handle, price, qty uint64, ok bool) {
+	l, ok := b.side(s).best()
+
+	if !ok {
+		return levels.NoHandle, 0, 0, false
+	}
+
+	h, qty, ok = b.levels.Front(l)
+	if !ok {
+		panic("book: empty level")
+	}
+
+	return h, b.levels.Price(l), qty, true
+}
+
+func (b *Book) Fill(h levels.Handle, qty uint64) (remaining uint64) {
+	l, remaining, empty := b.levels.Fill(h, qty)
+	if empty {
+		b.dropLevel(l)
+
+	}
+	return remaining
+}
+
+func (b *Book) side(s Side) *side {
+	switch s {
+	case Buy:
+		return &b.bids
+	case Sell:
+		return &b.asks
+	}
+	panic("book: invalid side")
+}
+
+func (b *Book) dropLevel(idx levels.LevelIndex) {
+	price := b.levels.Price(idx)
+
+	i, found := b.bids.find(b.levels, price)
+	if found && b.bids.levels[i] == idx {
+		b.bids.removeAt(i)
+		b.levels.FreeLevel(idx)
+		return
+	}
+
+	i, found = b.asks.find(b.levels, price)
+	if found && b.asks.levels[i] == idx {
+		b.asks.removeAt(i)
+		b.levels.FreeLevel(idx)
+		return
+	}
+
+	panic("book: level missing from side")
 }
