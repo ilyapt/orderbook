@@ -53,7 +53,7 @@ func (l *Levels) Cancel(h Handle) (LevelIndex, bool, error) {
 	return levelId, empty, nil
 }
 
-func (l *Levels) Fill(h Handle, qty uint64) (LevelIndex, bool) {
+func (l *Levels) Fill(h Handle, qty uint64) (LevelIndex, uint64, bool) {
 	index, o, err := l.get(h)
 	if err != nil {
 		panic("levels: Fill: stale handle")
@@ -64,9 +64,11 @@ func (l *Levels) Fill(h Handle, qty uint64) (LevelIndex, bool) {
 	if o.qty > qty {
 		o.qty -= qty
 		l.levels[o.level].totalQty -= qty
-		return o.level, false
+		return o.level, o.qty, false
 	}
-	return l.remove(index, o)
+
+	idx, empty := l.remove(index, o)
+	return idx, 0, empty
 }
 
 func (l *Levels) remove(index int32, o *order) (LevelIndex, bool) {

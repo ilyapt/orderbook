@@ -1,13 +1,13 @@
 package levels
 
-func (l *Levels) Front(lvl LevelIndex) (Handle, bool) {
+func (l *Levels) Front(lvl LevelIndex) (Handle, uint64, bool) {
 	index := l.getLevel(lvl).head
 	if index < 0 {
-		return NoHandle, false
+		return NoHandle, 0, false
 	}
 
 	o := &l.orders[index]
-	return makeHandle(index, o.seq), true
+	return makeHandle(index, o.seq), o.qty, true
 }
 
 func (l *Levels) getLevel(lvl LevelIndex) *level {

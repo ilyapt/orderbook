@@ -87,16 +87,18 @@ func TestOrderLifecycle(t *testing.T) {
 	require.Equal(t, uint64(1), oh.Seq())
 	require.Equal(t, int32(0), oh.index())
 
-	li, empty := l.Fill(oh, 50)
+	li, q, empty := l.Fill(oh, 50)
 	require.False(t, empty)
+	require.Equal(t, uint64(50), q)
 	require.Equal(t, lvlIdx, li)
 	require.Equal(t, uint64(50), l.levels[lvlIdx].totalQty)
 	checkInvariants(t, l)
 
 	require.PanicsWithValue(t, "levels: Fill: qty exceeds order remainder", func() { l.Fill(oh, 150) })
 
-	li, empty = l.Fill(oh, 50)
+	li, q, empty = l.Fill(oh, 50)
 	require.True(t, empty)
+	require.Equal(t, uint64(0), q)
 	require.Equal(t, lvlIdx, li)
 	require.Equal(t, uint64(0), l.levels[lvlIdx].totalQty)
 	checkInvariants(t, l)

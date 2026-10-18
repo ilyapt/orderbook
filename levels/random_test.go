@@ -54,10 +54,11 @@ func compareModel(t *testing.T, l *Levels, model map[LevelIndex]*modelLevel) {
 		require.Equal(t, m.price, l.Price(id), "level %d Price()", id)
 		require.Equal(t, m.total(), l.TotalQty(id), "level %d TotalQty()", id)
 
-		front, ok := l.Front(id)
+		front, frontQty, ok := l.Front(id)
 		require.Equal(t, len(m.orders) > 0, ok, "level %d Front() ok", id)
 		if ok {
 			require.Equal(t, m.orders[0].h, front, "level %d Front()", id)
+			require.Equal(t, m.orders[0].qty, frontQty, "level %d Front() qty", id)
 		}
 
 		idx := make([]int32, len(m.orders))
@@ -167,8 +168,9 @@ func runRandom(t *testing.T, seed int64, steps int) {
 			m := model[id]
 			o := m.orders[i]
 			fill := uint64(rng.Int63n(int64(o.qty))) + 1 // 1..qty
-			gotID, empty := l.Fill(o.h, fill)
+			gotID, remaining, empty := l.Fill(o.h, fill)
 			require.Equal(t, id, gotID, "step %d", step)
+			require.Equal(t, o.qty-fill, remaining, "step %d: remaining", step)
 			if fill == o.qty {
 				m.remove(i)
 				stale = append(stale, o.h)
