@@ -45,8 +45,9 @@ func TestGetters(t *testing.T) {
 	require.Equal(t, uint64(70), q)
 	require.Equal(t, uint64(120), l.TotalQty(lvl))
 
-	li, empty, err = l.Cancel(o1)
+	li, remains, empty, err := l.Cancel(o1)
 	require.NoError(t, err)
+	require.Equal(t, uint64(70), remains)
 	require.False(t, empty)
 	require.Equal(t, lvl, li)
 
@@ -62,8 +63,9 @@ func TestGetters(t *testing.T) {
 	require.ErrorIs(t, err, ErrNotFound)
 	require.Equal(t, LevelIndex(0), li)
 
-	_, empty, err = l.Cancel(o2)
+	_, remains, empty, err = l.Cancel(o2)
 	require.NoError(t, err)
+	require.Equal(t, uint64(50), remains)
 	require.True(t, empty)
 	require.Equal(t, uint64(0), l.TotalQty(lvl))
 

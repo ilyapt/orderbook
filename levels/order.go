@@ -44,13 +44,14 @@ func (l *Levels) Push(level LevelIndex, qty uint64) (Handle, error) {
 	return makeHandle(index, seq), nil
 }
 
-func (l *Levels) Cancel(h Handle) (LevelIndex, bool, error) {
+func (l *Levels) Cancel(h Handle) (LevelIndex, uint64, bool, error) {
 	index, o, err := l.get(h)
 	if err != nil {
-		return LevelIndex(0), false, err
+		return LevelIndex(0), 0, false, err
 	}
+	qty := o.qty
 	levelId, empty := l.remove(index, o)
-	return levelId, empty, nil
+	return levelId, qty, empty, nil
 }
 
 func (l *Levels) Fill(h Handle, qty uint64) (LevelIndex, uint64, bool) {

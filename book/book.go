@@ -50,7 +50,7 @@ func (b *Book) side(s Side) *side {
 }
 
 func (b *Book) Cancel(h levels.Handle) error {
-	idx, empty, err := b.levels.Cancel(h)
+	idx, _, empty, err := b.levels.Cancel(h)
 	if err != nil {
 		return err
 	}

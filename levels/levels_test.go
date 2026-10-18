@@ -103,7 +103,7 @@ func TestOrderLifecycle(t *testing.T) {
 	require.Equal(t, uint64(0), l.levels[lvlIdx].totalQty)
 	checkInvariants(t, l)
 
-	_, _, err = l.Cancel(oh)
+	_, _, _, err = l.Cancel(oh)
 	require.ErrorIs(t, err, ErrNotFound)
 
 	oh2, err := l.Push(lvlIdx, 10)
@@ -121,13 +121,14 @@ func TestOrderLifecycle(t *testing.T) {
 	require.Equal(t, ls, l.seq)
 	require.Len(t, l.orders, ln)
 
-	_, _, err = l.Cancel(oh)
+	_, _, _, err = l.Cancel(oh)
 	require.ErrorIs(t, err, ErrNotFound)
 
 	require.PanicsWithValue(t, "levels: Fill: stale handle", func() { l.Fill(oh, 100) })
 
-	li, empty, err = l.Cancel(oh2)
+	li, remains, empty, err := l.Cancel(oh2)
 	require.NoError(t, err)
+	require.Equal(t, uint64(10), remains)
 	require.True(t, empty)
 	require.Equal(t, lvlIdx, li)
 
@@ -152,24 +153,27 @@ func TestQueueOrderAfterRemovals(t *testing.T) {
 
 	chainEqual(t, l, &l.levels[lvlIdx], oh1.index(), oh2.index(), oh3.index())
 
-	li, empty, err := l.Cancel(oh2)
+	li, remains, empty, err := l.Cancel(oh2)
 	require.NoError(t, err)
+	require.Equal(t, uint64(50), remains)
 	require.False(t, empty)
 	require.Equal(t, lvlIdx, li)
 	checkInvariants(t, l)
 
 	chainEqual(t, l, &l.levels[lvlIdx], oh1.index(), oh3.index())
 
-	li, empty, err = l.Cancel(oh1)
+	li, remains, empty, err = l.Cancel(oh1)
 	require.NoError(t, err)
+	require.Equal(t, uint64(100), remains)
 	require.False(t, empty)
 	require.Equal(t, lvlIdx, li)
 	checkInvariants(t, l)
 
 	chainEqual(t, l, &l.levels[lvlIdx], oh3.index())
 
-	li, empty, err = l.Cancel(oh3)
+	li, remains, empty, err = l.Cancel(oh3)
 	require.NoError(t, err)
+	require.Equal(t, uint64(200), remains)
 	require.True(t, empty)
 	require.Equal(t, lvlIdx, li)
 	checkInvariants(t, l)
@@ -186,8 +190,9 @@ func TestLevelsReuse(t *testing.T) {
 	require.NoError(t, err)
 	checkInvariants(t, l)
 
-	li, empty, err := l.Cancel(o1)
+	li, remains, empty, err := l.Cancel(o1)
 	require.NoError(t, err)
+	require.Equal(t, uint64(10), remains)
 	require.True(t, empty)
 	require.Equal(t, lvl1, li)
 	checkInvariants(t, l)
@@ -203,8 +208,9 @@ func TestLevelsReuse(t *testing.T) {
 
 	require.PanicsWithValue(t, "levels: level is freed", func() { _, _ = l.Push(lvl1, 100) })
 
-	li, empty, err = l.Cancel(o2)
+	li, remains, empty, err = l.Cancel(o2)
 	require.NoError(t, err)
+	require.Equal(t, uint64(20), remains)
 	require.True(t, empty)
 	require.Equal(t, lvl2, li)
 	checkInvariants(t, l)

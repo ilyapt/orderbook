@@ -1,11 +1,12 @@
 package book
 
 import (
-	"orderbook/levels"
 	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"orderbook/levels"
 )
 
 func makeLevels() (*levels.Levels, []levels.LevelIndex) {

@@ -153,9 +153,10 @@ func runRandom(t *testing.T, seed int64, steps int) {
 			}
 			m := model[id]
 			o := m.orders[i]
-			gotID, empty, err := l.Cancel(o.h)
+			gotID, remaining, empty, err := l.Cancel(o.h)
 			require.NoError(t, err, "step %d", step)
 			require.Equal(t, id, gotID, "step %d", step)
+			require.Equal(t, o.qty, remaining, "step %d: remaining", step)
 			m.remove(i)
 			require.Equal(t, len(m.orders) == 0, empty, "step %d: empty flag", step)
 			stale = append(stale, o.h)
@@ -184,7 +185,7 @@ func runRandom(t *testing.T, seed int64, steps int) {
 				continue
 			}
 			h := stale[rng.Intn(len(stale))]
-			_, _, err := l.Cancel(h)
+			_, _, _, err := l.Cancel(h)
 			require.ErrorIs(t, err, ErrNotFound, "step %d", step)
 
 		case op < 95: // zero qty leaves state untouched

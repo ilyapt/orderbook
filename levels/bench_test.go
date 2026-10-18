@@ -173,7 +173,7 @@ func BenchmarkCancel(b *testing.B) {
 			shuffle(hs)
 			b.StartTimer()
 			for _, h := range hs {
-				lvl, _, _ := l.Cancel(h)
+				lvl, _, _, _ := l.Cancel(h)
 				sinkLevel += int(lvl)
 			}
 		}
@@ -218,7 +218,7 @@ func BenchmarkSteady(b *testing.B) {
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				k := int(rnd[i&rndMask]) % live
-				lvl, _, _ := l.Cancel(hs[k])
+				lvl, _, _, _ := l.Cancel(hs[k])
 				sinkLevel += int(lvl)
 				hs[k], _ = l.Push(lv[rnd[(i+1)&rndMask]%numLevels], 1)
 			}
