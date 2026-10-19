@@ -8,22 +8,19 @@ type order struct {
 	next  int32
 }
 
-func (l *Levels) Push(level LevelIndex, qty uint64) (Handle, error) {
+func (l *Levels) Push(level LevelIndex, seq, qty uint64) (Handle, error) {
 	if qty == 0 {
 		return NoHandle, ErrZeroQty
 	}
 
 	lvl := l.getLevel(level)
 
-	if l.seq == seqMax {
-		panic("levels: Push: seq exhausted")
+	if seq == 0 || seq > seqMax {
+		panic("levels: Push: invalid seq")
 	}
 
 	index := l.alloc()
 	o := &l.orders[index]
-
-	l.seq++
-	seq := l.seq
 
 	o.level = level
 	o.qty = qty

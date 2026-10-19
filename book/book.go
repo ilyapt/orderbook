@@ -30,7 +30,7 @@ func New(ordersCap, levelsCap int) *Book {
 	}
 }
 
-func (b *Book) Add(s Side, price, qty uint64) (levels.Handle, error) {
+func (b *Book) Add(s Side, seq, price, qty uint64) (levels.Handle, error) {
 	if qty == 0 {
 		return levels.NoHandle, levels.ErrZeroQty
 	}
@@ -38,12 +38,12 @@ func (b *Book) Add(s Side, price, qty uint64) (levels.Handle, error) {
 
 	i, found := sd.find(b.levels, price)
 	if found {
-		return b.levels.Push(sd.levels[i], qty)
+		return b.levels.Push(sd.levels[i], seq, qty)
 	}
 
 	lvl := b.levels.NewLevel(price)
 	sd.insertAt(i, lvl)
-	return b.levels.Push(lvl, qty)
+	return b.levels.Push(lvl, seq, qty)
 }
 
 func (b *Book) LevelAt(s Side, depth int) (price, totalQty uint64, ok bool) {

@@ -10,11 +10,11 @@ import (
 
 func TestBook(t *testing.T) {
 	book := New(10, 10)
-	h1, err := book.Add(Buy, 100, 10)
+	h1, err := book.Add(Buy, 1, 100, 10)
 	require.NoError(t, err)
-	h2, err := book.Add(Buy, 100, 10)
+	h2, err := book.Add(Buy, 2, 100, 10)
 	require.NoError(t, err)
-	h3, err := book.Add(Sell, 101, 5)
+	h3, err := book.Add(Sell, 3, 101, 5)
 	require.NoError(t, err)
 
 	price, totalQty, ok := book.Best(Buy)
@@ -50,16 +50,16 @@ func TestBook(t *testing.T) {
 	_, err = book.Cancel(h3)
 	require.ErrorIs(t, err, levels.ErrNotFound)
 
-	h4, err := book.Add(Buy, 100, 0)
+	h4, err := book.Add(Buy, 4, 100, 0)
 	require.ErrorIs(t, err, levels.ErrZeroQty)
 	require.Equal(t, levels.NoHandle, h4)
 
 	_, _, ok = book.Best(Buy)
 	require.False(t, ok)
 
-	h5, err := book.Add(Buy, 100, 1)
+	h5, err := book.Add(Buy, 5, 100, 1)
 	require.NoError(t, err)
-	_, err = book.Add(Sell, 100, 1)
+	_, err = book.Add(Sell, 6, 100, 1)
 	require.NoError(t, err)
 
 	remaining, err = book.Cancel(h5)
@@ -72,16 +72,16 @@ func TestBook(t *testing.T) {
 	require.Equal(t, uint64(100), price)
 	require.Equal(t, uint64(1), totalQty)
 
-	require.PanicsWithValue(t, "book: invalid side", func() { _, _ = book.Add(3, 1, 1) })
+	require.PanicsWithValue(t, "book: invalid side", func() { _, _ = book.Add(3, 7, 1, 1) })
 }
 
 func TestFrontFill(t *testing.T) {
 	book := New(10, 10)
-	h1, err := book.Add(Buy, 100, 10)
+	h1, err := book.Add(Buy, 1, 100, 10)
 	require.NoError(t, err)
-	h2, err := book.Add(Buy, 100, 5)
+	h2, err := book.Add(Buy, 2, 100, 5)
 	require.NoError(t, err)
-	h3, err := book.Add(Sell, 101, 7)
+	h3, err := book.Add(Sell, 3, 101, 7)
 	require.NoError(t, err)
 
 	h, price, qty, ok := book.Front(Buy)
@@ -124,15 +124,15 @@ func TestLevelAt(t *testing.T) {
 	_, _, ok := book.LevelAt(Buy, 0)
 	require.False(t, ok)
 
-	_, err := book.Add(Buy, 100, 10)
+	_, err := book.Add(Buy, 1, 100, 10)
 	require.NoError(t, err)
-	_, err = book.Add(Buy, 98, 3)
+	_, err = book.Add(Buy, 2, 98, 3)
 	require.NoError(t, err)
-	_, err = book.Add(Buy, 99, 2)
+	_, err = book.Add(Buy, 3, 99, 2)
 	require.NoError(t, err)
-	_, err = book.Add(Sell, 101, 7)
+	_, err = book.Add(Sell, 4, 101, 7)
 	require.NoError(t, err)
-	_, err = book.Add(Sell, 103, 1)
+	_, err = book.Add(Sell, 5, 103, 1)
 	require.NoError(t, err)
 
 	price, totalQty, ok := book.LevelAt(Buy, 0)

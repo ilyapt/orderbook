@@ -17,9 +17,9 @@ func TestGetters(t *testing.T) {
 	require.Equal(t, uint64(0), qty)
 	require.Equal(t, NoHandle, h)
 
-	o1, err := l.Push(lvl, 100)
+	o1, err := l.Push(lvl, 1, 100)
 	require.NoError(t, err)
-	o2, err := l.Push(lvl, 50)
+	o2, err := l.Push(lvl, 2, 50)
 	require.NoError(t, err)
 	require.Equal(t, uint64(150), l.TotalQty(lvl))
 

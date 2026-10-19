@@ -138,7 +138,7 @@ func BenchmarkPush(b *testing.B) {
 			l, lv := newLevels(n)
 			b.StartTimer()
 			for j := 0; j < n; j++ {
-				h, _ := l.Push(lv[rnd[j&rndMask]%numLevels], 1)
+				h, _ := l.Push(lv[rnd[j&rndMask]%numLevels], uint64(j+1), 1)
 				sinkHandle += h
 			}
 		}
@@ -168,7 +168,7 @@ func BenchmarkCancel(b *testing.B) {
 			l, lv := newLevels(n)
 			hs := make([]levels.Handle, n)
 			for j := range hs {
-				hs[j], _ = l.Push(lv[rnd[j&rndMask]%numLevels], 1)
+				hs[j], _ = l.Push(lv[rnd[j&rndMask]%numLevels], uint64(j+1), 1)
 			}
 			shuffle(hs)
 			b.StartTimer()
@@ -209,7 +209,7 @@ func BenchmarkSteady(b *testing.B) {
 			l, lv := newLevels(live)
 			hs := make([]levels.Handle, live)
 			for j := range hs {
-				hs[j], _ = l.Push(lv[rnd[j&rndMask]%numLevels], 1)
+				hs[j], _ = l.Push(lv[rnd[j&rndMask]%numLevels], uint64(j+1), 1)
 			}
 			var before, after runtime.MemStats
 			runtime.GC()
@@ -220,7 +220,7 @@ func BenchmarkSteady(b *testing.B) {
 				k := int(rnd[i&rndMask]) % live
 				lvl, _, _, _ := l.Cancel(hs[k])
 				sinkLevel += int(lvl)
-				hs[k], _ = l.Push(lv[rnd[(i+1)&rndMask]%numLevels], 1)
+				hs[k], _ = l.Push(lv[rnd[(i+1)&rndMask]%numLevels], uint64(live+i+1), 1)
 			}
 			b.StopTimer()
 			runtime.ReadMemStats(&after)

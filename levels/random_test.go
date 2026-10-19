@@ -96,6 +96,7 @@ func runRandom(t *testing.T, seed int64, steps int) {
 	model := map[LevelIndex]*modelLevel{}
 	var liveLevels []LevelIndex // keys of model, for picking a random level
 	var stale []Handle          // handles of cancelled and fully filled orders
+	var seq uint64              // order sequence, owned by the caller of Push
 
 	pickLevel := func() LevelIndex {
 		return liveLevels[rng.Intn(len(liveLevels))]
@@ -142,7 +143,8 @@ func runRandom(t *testing.T, seed int64, steps int) {
 			}
 			id := pickLevel()
 			qty := uint64(rng.Intn(100) + 1)
-			h, err := l.Push(id, qty)
+			seq++
+			h, err := l.Push(id, seq, qty)
 			require.NoError(t, err, "step %d", step)
 			model[id].orders = append(model[id].orders, modelOrder{h: h, qty: qty})
 
@@ -192,11 +194,10 @@ func runRandom(t *testing.T, seed int64, steps int) {
 			if len(liveLevels) == 0 {
 				continue
 			}
-			seq, n := l.seq, len(l.orders)
-			h, err := l.Push(pickLevel(), 0)
+			n := len(l.orders)
+			h, err := l.Push(pickLevel(), seq+1, 0)
 			require.ErrorIs(t, err, ErrZeroQty, "step %d", step)
 			require.Equal(t, NoHandle, h)
-			require.Equal(t, seq, l.seq, "step %d: seq consumed on error", step)
 			require.Len(t, l.orders, n, "step %d: slot allocated on error", step)
 
 		default: // free an empty level
