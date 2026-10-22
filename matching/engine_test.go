@@ -23,6 +23,10 @@ func TestPlace(t *testing.T) {
 	require.ErrorIs(t, err, ErrZeroPrice)
 	_, err = e.Place(Order{TIF: 0, Side: book.Buy, Price: 100, Qty: 1})
 	require.ErrorIs(t, err, ErrInvalidTIF)
+	_, err = e.Place(Order{TIF: GTC, Side: 0, Price: 100, Qty: 1})
+	require.ErrorIs(t, err, ErrInvalidSide)
+	_, err = e.Place(Order{TIF: GTC, Side: 3, Price: 100, Qty: 1})
+	require.ErrorIs(t, err, ErrInvalidSide)
 
 	got = got[:0]
 	r1, err := e.Place(Order{TIF: GTC, Side: book.Buy, Price: 100, Qty: 10})

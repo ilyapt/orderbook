@@ -8,9 +8,10 @@ import (
 )
 
 var (
-	ErrZeroQty    = errors.New("order quantity must be greater than zero")
-	ErrZeroPrice  = errors.New("order price must be greater than zero")
-	ErrInvalidTIF = errors.New("incorrect order tif")
+	ErrInvalidSide = errors.New("invalid side")
+	ErrZeroQty     = errors.New("order quantity must be greater than zero")
+	ErrZeroPrice   = errors.New("order price must be greater than zero")
+	ErrInvalidTIF  = errors.New("incorrect order tif")
 )
 
 type Engine struct {
@@ -31,6 +32,9 @@ func New(ordersCap, levelsCap int, sink TradeSink) (*Engine, error) {
 }
 
 func (e *Engine) Place(order Order) (Report, error) {
+	if order.Side != book.Buy && order.Side != book.Sell {
+		return Report{}, ErrInvalidSide
+	}
 	if order.Qty == 0 {
 		return Report{}, ErrZeroQty
 	}
