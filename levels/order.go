@@ -8,37 +8,65 @@ type order struct {
 	next  int32
 }
 
-func (l *Levels) Push(level LevelIndex, seq, qty uint64) (Handle, error) {
-	if qty == 0 {
-		return NoHandle, ErrZeroQty
-	}
-
-	lvl := l.getLevel(level)
-
+func (l *Levels) Reserve(seq uint64) Handle {
 	if seq == 0 || seq > seqMax {
-		panic("levels: Push: invalid seq")
+		panic("levels: Reserve: invalid seq")
 	}
 
 	index := l.alloc()
 	o := &l.orders[index]
-
-	o.level = level
-	o.qty = qty
 	o.seq = seq
+	o.level = reserved
+	return makeHandle(index, seq)
+}
 
-	lvl.totalQty += qty
-
-	if lvl.head == -1 {
-		lvl.head = index
-		lvl.tail = index
-
-		return makeHandle(index, seq), nil
+func (l *Levels) Rest(h Handle, lvl LevelIndex, qty uint64) {
+	if qty == 0 {
+		panic("levels: Rest: invalid qty")
 	}
 
-	o.prev = lvl.tail
-	l.orders[lvl.tail].next = index
-	lvl.tail = index
-	return makeHandle(index, seq), nil
+	index, seq := h.index(), h.Seq()
+
+	o := &l.orders[index]
+	if o.level != reserved || o.seq != seq {
+		panic("levels: Rest: order is not reserved")
+	}
+	lv := l.getLevel(lvl)
+
+	o.level = lvl
+	o.qty = qty
+
+	lv.totalQty += qty
+
+	if lv.head == -1 {
+		lv.head = index
+		lv.tail = index
+		return
+	}
+
+	o.prev = lv.tail
+	l.orders[lv.tail].next = index
+	lv.tail = index
+}
+
+func (l *Levels) Release(h Handle) {
+	index := h.index()
+	o := &l.orders[index]
+	if o.level != reserved || o.seq != h.Seq() {
+		panic("levels: Release: order is not reserved")
+	}
+	l.free(index)
+}
+
+func (l *Levels) Push(level LevelIndex, seq, qty uint64) (Handle, error) {
+	if qty == 0 {
+		return NoHandle, ErrZeroQty
+	}
+	l.getLevel(level)
+
+	h := l.Reserve(seq)
+	l.Rest(h, level, qty)
+	return h, nil
 }
 
 func (l *Levels) Cancel(h Handle) (LevelIndex, uint64, bool, error) {

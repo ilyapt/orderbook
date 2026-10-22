@@ -30,13 +30,18 @@ type Report struct {
 	OrderID      uint64
 	RemainingQty uint64
 	Status       Status
-	Trades       []Trade
 }
 
 type Trade struct {
 	ID             uint64
+	TakerOrderID   uint64
 	MakerOrderID   uint64
 	Price          uint64
 	Qty            uint64
+	TakerRemaining uint64
 	MakerRemaining uint64
+}
+
+type TradeSink interface {
+	OnTrade(Trade)
 }
