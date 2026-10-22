@@ -6,31 +6,36 @@ import (
 	"orderbook/levels"
 )
 
+type entry struct {
+	price uint64
+	idx   int32
+}
+
 type side struct {
-	levels []levels.LevelIndex
+	levels []entry
 	bid    bool
 }
 
-func (s *side) find(lv *levels.Levels, price uint64) (int, bool) {
-	n := len(s.levels)
+func gallop(s []entry, bid bool, price uint64) (int, bool) {
+	n := len(s)
 	if n == 0 {
 		return 0, false
 	}
 
 	r := n - 1
-	rPrice := lv.Price(s.levels[r])
+	rPrice := s[r].price
 	if rPrice == price {
 		return r, true
 	}
-	if (s.bid && rPrice < price) ||
-		(!s.bid && rPrice > price) {
+	if (bid && rPrice < price) ||
+		(!bid && rPrice > price) {
 		return n, false
 	}
 
 	l, step := r, 1
 	for l >= 0 {
-		lPrice := lv.Price(s.levels[l])
-		if (s.bid && lPrice <= price) || (!s.bid && lPrice >= price) {
+		lPrice := s[l].price
+		if (bid && lPrice <= price) || (!bid && lPrice >= price) {
 			break
 		}
 		r = l
@@ -43,13 +48,13 @@ func (s *side) find(lv *levels.Levels, price uint64) (int, bool) {
 
 	for l <= r {
 		m := l + (r-l)/2
-		mPrice := lv.Price(s.levels[m])
+		mPrice := s[m].price
 		if mPrice == price {
 			return m, true
 		}
 
-		if (s.bid && mPrice > price) ||
-			(!s.bid && mPrice < price) {
+		if (bid && mPrice > price) ||
+			(!bid && mPrice < price) {
 			r = m - 1
 		} else {
 			l = m + 1
@@ -59,8 +64,12 @@ func (s *side) find(lv *levels.Levels, price uint64) (int, bool) {
 	return l, false
 }
 
-func (s *side) insertAt(i int, idx levels.LevelIndex) {
-	s.levels = slices.Insert(s.levels, i, idx)
+func (s *side) find(price uint64) (int, bool) {
+	return gallop(s.levels, s.bid, price)
+}
+
+func (s *side) insertAt(i int, idx levels.LevelIndex, price uint64) {
+	s.levels = slices.Insert(s.levels, i, entry{price: price, idx: int32(idx)})
 }
 
 func (s *side) removeAt(i int) {
@@ -71,5 +80,5 @@ func (s *side) best() (levels.LevelIndex, bool) {
 	if len(s.levels) == 0 {
 		return -1, false
 	}
-	return s.levels[len(s.levels)-1], true
+	return levels.LevelIndex(s.levels[len(s.levels)-1].idx), true
 }
