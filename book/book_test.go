@@ -73,6 +73,19 @@ func TestBook(t *testing.T) {
 	require.Equal(t, uint64(1), totalQty)
 
 	require.PanicsWithValue(t, "book: invalid side", func() { _, _ = book.Add(3, 7, 1, 1) })
+
+	h := book.Reserve(9)
+	require.Equal(t, uint64(9), h.Seq())
+	require.ErrorIs(t, book.Rest(Buy, h, 100, 0), levels.ErrZeroQty)
+	_, _, ok = book.Best(Buy)
+	require.False(t, ok)
+	_, err = book.Cancel(h)
+	require.ErrorIs(t, err, levels.ErrNotFound)
+
+	h = book.Reserve(10)
+	book.Release(h)
+	_, err = book.Cancel(h)
+	require.ErrorIs(t, err, levels.ErrNotFound)
 }
 
 func TestFrontFill(t *testing.T) {
