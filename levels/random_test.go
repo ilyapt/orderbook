@@ -96,6 +96,7 @@ func runRandom(t *testing.T, seed int64, steps int) {
 	model := map[LevelIndex]*modelLevel{}
 	var liveLevels []LevelIndex // keys of model, for picking a random level
 	var stale []Handle          // handles of cancelled and fully filled orders
+	var pending []Handle        // reserved handles not yet rested or released
 	var seq uint64              // order sequence, owned by the caller of Push
 
 	pickLevel := func() LevelIndex {
@@ -137,7 +138,7 @@ func runRandom(t *testing.T, seed int64, steps int) {
 			model[id] = &modelLevel{price: price}
 			liveLevels = append(liveLevels, id)
 
-		case op < 50: // push
+		case op < 40: // push
 			if len(liveLevels) == 0 {
 				continue
 			}
@@ -146,6 +147,30 @@ func runRandom(t *testing.T, seed int64, steps int) {
 			seq++
 			h, err := l.Push(id, seq, qty)
 			require.NoError(t, err, "step %d", step)
+			model[id].orders = append(model[id].orders, modelOrder{h: h, qty: qty})
+
+		case op < 45: // reserve a slot, settle it on a later step
+			seq++
+			pending = append(pending, l.Reserve(seq))
+
+		case op < 50: // rest or release a pending reservation
+			if len(pending) == 0 {
+				continue
+			}
+			i := rng.Intn(len(pending))
+			h := pending[i]
+			pending[i] = pending[len(pending)-1]
+			pending = pending[:len(pending)-1]
+			_, _, _, err := l.Cancel(h)
+			require.ErrorIs(t, err, ErrNotFound, "step %d: cancel of a reserved order", step)
+			if len(liveLevels) == 0 || rng.Intn(2) == 0 {
+				l.Release(h)
+				stale = append(stale, h)
+				continue
+			}
+			id := pickLevel()
+			qty := uint64(rng.Intn(100) + 1)
+			l.Rest(h, id, qty)
 			model[id].orders = append(model[id].orders, modelOrder{h: h, qty: qty})
 
 		case op < 70: // cancel a live order
@@ -221,4 +246,10 @@ func runRandom(t *testing.T, seed int64, steps int) {
 			compareModel(t, l, model)
 		}
 	}
+
+	for _, h := range pending {
+		l.Release(h)
+	}
+	checkInvariants(t, l)
+	compareModel(t, l, model)
 }

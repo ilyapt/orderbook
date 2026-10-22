@@ -45,9 +45,16 @@ func checkInvariants(t *testing.T, l *Levels) {
 		levelsLen--
 	}
 
+	for _, o := range l.orders {
+		if o.level == reserved {
+			require.Greater(t, ordersLen, 0)
+			ordersLen--
+		}
+	}
+
 	n := l.freeOrder
 	for n != -1 {
-		require.Equal(t, LevelIndex(-1), l.orders[n].level)
+		require.Equal(t, unlinked, l.orders[n].level)
 		require.Equal(t, int32(-1), l.orders[n].prev)
 		require.Greater(t, ordersLen, 0)
 		n = l.orders[n].next
@@ -276,4 +283,56 @@ func TestHandlePacking(t *testing.T) {
 
 	require.Equal(t, int32(0), NoHandle.index())
 	require.Equal(t, uint64(0), NoHandle.Seq())
+}
+
+func TestReserve(t *testing.T) {
+	l := New(10, 10)
+	lvl := l.NewLevel(5)
+
+	h := l.Reserve(7)
+	require.Equal(t, uint64(7), h.Seq())
+	require.Equal(t, int32(0), h.index())
+	require.Equal(t, reserved, l.orders[0].level)
+	checkInvariants(t, l)
+
+	_, _, _, err := l.Cancel(h)
+	require.ErrorIs(t, err, ErrNotFound)
+	_, err = l.Qty(h)
+	require.ErrorIs(t, err, ErrNotFound)
+	_, _, ok := l.Front(lvl)
+	require.False(t, ok)
+
+	require.PanicsWithValue(t, "levels: Rest: invalid qty", func() { l.Rest(h, lvl, 0) })
+
+	l.Rest(h, lvl, 10)
+	require.Equal(t, lvl, l.orders[0].level)
+	require.Equal(t, uint64(10), l.levels[lvl].totalQty)
+	fh, qty, ok := l.Front(lvl)
+	require.True(t, ok)
+	require.Equal(t, h, fh)
+	require.Equal(t, uint64(10), qty)
+	checkInvariants(t, l)
+
+	require.PanicsWithValue(t, "levels: Rest: order is not reserved", func() { l.Rest(h, lvl, 10) })
+	require.PanicsWithValue(t, "levels: Release: order is not reserved", func() { l.Release(h) })
+
+	h2 := l.Reserve(8)
+	require.Equal(t, int32(1), h2.index())
+	checkInvariants(t, l)
+
+	l.Release(h2)
+	require.Equal(t, unlinked, l.orders[1].level)
+	require.Equal(t, int32(1), l.freeOrder)
+	checkInvariants(t, l)
+
+	require.PanicsWithValue(t, "levels: Release: order is not reserved", func() { l.Release(h2) })
+	require.PanicsWithValue(t, "levels: Rest: order is not reserved", func() { l.Rest(h2, lvl, 10) })
+
+	h3 := l.Reserve(9)
+	require.Equal(t, h2.index(), h3.index())
+	require.PanicsWithValue(t, "levels: Release: order is not reserved", func() { l.Release(h2) })
+	l.Release(h3)
+	checkInvariants(t, l)
+
+	require.PanicsWithValue(t, "levels: Reserve: invalid seq", func() { l.Reserve(0) })
 }
