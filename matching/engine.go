@@ -15,14 +15,19 @@ var (
 
 type Engine struct {
 	book        *book.Book
+	sink        TradeSink
 	lastOrderID uint64
 	lastTradeID uint64
 }
 
-func New(ordersCap, levelsCap int) *Engine {
+func New(ordersCap, levelsCap int, sink TradeSink) (*Engine, error) {
+	if sink == nil {
+		return nil, errors.New("sink cannot be nil")
+	}
 	return &Engine{
 		book: book.New(ordersCap, levelsCap),
-	}
+		sink: sink,
+	}, nil
 }
 
 func (e *Engine) Place(order Order) (Report, error) {
@@ -37,8 +42,9 @@ func (e *Engine) Place(order Order) (Report, error) {
 	}
 
 	e.lastOrderID++
+	taker := e.book.Reserve(e.lastOrderID)
 	report := Report{
-		OrderID:      uint64(levels.SeqHandle(e.lastOrderID)),
+		OrderID:      uint64(taker),
 		RemainingQty: order.Qty,
 	}
 	opp := order.Side.Opposite()
@@ -46,51 +52,56 @@ func (e *Engine) Place(order Order) (Report, error) {
 	switch order.TIF {
 	case PostOnly:
 		if price, _, ok := e.book.LevelAt(opp, 0); ok && crossed(order, price) {
+			e.book.Release(taker)
 			report.Status = Rejected
 			return report, nil
 		}
 	case FOK:
-		var sum uint64
-		for depth := 0; sum < order.Qty; depth++ {
+		var available uint64
+		for depth := 0; available < order.Qty; depth++ {
 			price, totalQty, ok := e.book.LevelAt(opp, depth)
 			if !ok || !crossed(order, price) {
+				e.book.Release(taker)
 				report.Status = Rejected
 				return report, nil
 			}
-			sum += totalQty
+			available += totalQty
 		}
 	}
 
 	for report.RemainingQty > 0 {
-		h, price, qty, ok := e.book.Front(opp)
+		maker, price, makerQty, ok := e.book.Front(opp)
 		if !ok || !crossed(order, price) {
 			break
 		}
-		take := min(report.RemainingQty, qty)
-		remaining := e.book.Fill(h, take)
+		take := min(report.RemainingQty, makerQty)
+		makerRemaining := e.book.Fill(maker, take)
 		e.lastTradeID++
-		report.Trades = append(report.Trades, Trade{
+		report.RemainingQty -= take
+
+		e.sink.OnTrade(Trade{
 			ID:             e.lastTradeID,
-			MakerOrderID:   uint64(h),
+			TakerOrderID:   uint64(taker),
+			MakerOrderID:   uint64(maker),
 			Price:          price,
 			Qty:            take,
-			MakerRemaining: remaining,
+			TakerRemaining: report.RemainingQty,
+			MakerRemaining: makerRemaining,
 		})
-		report.RemainingQty -= take
 	}
 
 	switch {
 	case report.RemainingQty == 0:
+		e.book.Release(taker)
 		report.Status = Filled
 	case order.TIF == IOC:
+		e.book.Release(taker)
 		report.Status = Canceled
 	default:
-		h, err := e.book.Add(order.Side, e.lastOrderID, order.Price, report.RemainingQty)
-		if err != nil {
-			return Report{}, err
+		if err := e.book.Rest(order.Side, taker, order.Price, report.RemainingQty); err != nil {
+			panic(err)
 		}
-		report.OrderID = uint64(h)
-		if len(report.Trades) == 0 {
+		if report.RemainingQty == order.Qty {
 			report.Status = Open
 		} else {
 			report.Status = PartiallyFilled

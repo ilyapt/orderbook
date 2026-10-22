@@ -23,10 +23,6 @@ func makeHandle(index int32, seq uint64) Handle {
 	return Handle(seq<<indexBits | uint64(index))
 }
 
-func SeqHandle(seq uint64) Handle {
-	return makeHandle(indexMask, seq)
-}
-
 func (h Handle) index() int32 { return int32(uint64(h) & indexMask) }
 func (h Handle) Seq() uint64  { return uint64(h) >> indexBits }
 
