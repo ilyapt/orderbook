@@ -29,6 +29,7 @@ func New(ordersCap, levelsCap int) *Book {
 		asks:   side{bid: false},
 	}
 }
+
 func (b *Book) Reserve(seq uint64) levels.Handle {
 	return b.levels.Reserve(seq)
 }
@@ -47,8 +48,8 @@ func (b *Book) Rest(s Side, h levels.Handle, price, qty uint64) error {
 	}
 
 	lvl := b.levels.NewLevel(price)
-	sd.insertAt(i, lvl)
 	b.levels.Rest(h, lvl, qty)
+	sd.insertAt(i, lvl)
 	return nil
 }
 
@@ -115,7 +116,6 @@ func (b *Book) Fill(h levels.Handle, qty uint64) (remaining uint64) {
 	l, remaining, empty := b.levels.Fill(h, qty)
 	if empty {
 		b.dropLevel(l)
-
 	}
 	return remaining
 }
