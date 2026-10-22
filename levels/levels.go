@@ -23,14 +23,15 @@ func makeHandle(index int32, seq uint64) Handle {
 	return Handle(seq<<indexBits | uint64(index))
 }
 
-func SeqHandle(seq uint64) Handle {
-	return makeHandle(indexMask, seq)
-}
-
 func (h Handle) index() int32 { return int32(uint64(h) & indexMask) }
 func (h Handle) Seq() uint64  { return uint64(h) >> indexBits }
 
 type LevelIndex int32
+
+const (
+	unlinked LevelIndex = -1
+	reserved LevelIndex = -2
+)
 
 type level struct {
 	price    uint64
@@ -68,13 +69,13 @@ func (l *Levels) alloc() int32 {
 		panic("levels: alloc: order capacity exhausted")
 	}
 	index := int32(len(l.orders))
-	l.orders = append(l.orders, order{qty: 0, prev: -1, next: -1})
+	l.orders = append(l.orders, order{qty: 0, prev: -1, next: -1, level: unlinked})
 	return index
 }
 
 func (l *Levels) free(index int32) {
 	o := &l.orders[index]
-	o.level = -1
+	o.level = unlinked
 	o.qty = 0
 	o.prev = -1
 	o.next = l.freeOrder

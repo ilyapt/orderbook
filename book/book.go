@@ -29,21 +29,39 @@ func New(ordersCap, levelsCap int) *Book {
 		asks:   side{bid: false},
 	}
 }
+func (b *Book) Reserve(seq uint64) levels.Handle {
+	return b.levels.Reserve(seq)
+}
 
-func (b *Book) Add(s Side, seq, price, qty uint64) (levels.Handle, error) {
+func (b *Book) Rest(s Side, h levels.Handle, price, qty uint64) error {
 	if qty == 0 {
-		return levels.NoHandle, levels.ErrZeroQty
+		b.levels.Release(h)
+		return levels.ErrZeroQty
 	}
 	sd := b.side(s)
 
 	i, found := sd.find(b.levels, price)
 	if found {
-		return b.levels.Push(sd.levels[i], seq, qty)
+		b.levels.Rest(h, sd.levels[i], qty)
+		return nil
 	}
 
 	lvl := b.levels.NewLevel(price)
 	sd.insertAt(i, lvl)
-	return b.levels.Push(lvl, seq, qty)
+	b.levels.Rest(h, lvl, qty)
+	return nil
+}
+
+func (b *Book) Release(h levels.Handle) {
+	b.levels.Release(h)
+}
+
+func (b *Book) Add(s Side, seq, price, qty uint64) (levels.Handle, error) {
+	h := b.Reserve(seq)
+	if err := b.Rest(s, h, price, qty); err != nil {
+		return levels.NoHandle, err
+	}
+	return h, nil
 }
 
 func (b *Book) LevelAt(s Side, depth int) (price, totalQty uint64, ok bool) {
