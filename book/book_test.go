@@ -132,9 +132,10 @@ func TestFrontFill(t *testing.T) {
 	require.PanicsWithValue(t, "levels: Fill: stale handle", func() { book.Fill(h1, 1) })
 }
 
-func TestLevelAt(t *testing.T) {
+func TestCursor(t *testing.T) {
 	book := New(10, 10)
-	_, _, ok := book.LevelAt(Buy, 0)
+	c := book.Cursor(Buy)
+	_, _, ok := c.Next()
 	require.False(t, ok)
 
 	_, err := book.Add(Buy, 1, 100, 10)
@@ -148,34 +149,38 @@ func TestLevelAt(t *testing.T) {
 	_, err = book.Add(Sell, 5, 103, 1)
 	require.NoError(t, err)
 
-	price, totalQty, ok := book.LevelAt(Buy, 0)
+	c = book.Cursor(Buy)
+	price, totalQty, ok := c.Next()
 	require.True(t, ok)
 	require.Equal(t, uint64(100), price)
 	require.Equal(t, uint64(10), totalQty)
 
-	price, totalQty, ok = book.LevelAt(Buy, 1)
+	price, totalQty, ok = c.Next()
 	require.True(t, ok)
 	require.Equal(t, uint64(99), price)
 	require.Equal(t, uint64(2), totalQty)
 
-	price, totalQty, ok = book.LevelAt(Buy, 2)
+	price, totalQty, ok = c.Next()
 	require.True(t, ok)
 	require.Equal(t, uint64(98), price)
 	require.Equal(t, uint64(3), totalQty)
 
-	_, _, ok = book.LevelAt(Buy, 3)
+	_, _, ok = c.Next()
+	require.False(t, ok)
+	_, _, ok = c.Next()
 	require.False(t, ok)
 
-	price, totalQty, ok = book.LevelAt(Sell, 0)
+	c = book.Cursor(Sell)
+	price, totalQty, ok = c.Next()
 	require.True(t, ok)
 	require.Equal(t, uint64(101), price)
 	require.Equal(t, uint64(7), totalQty)
 
-	price, totalQty, ok = book.LevelAt(Sell, 1)
+	price, totalQty, ok = c.Next()
 	require.True(t, ok)
 	require.Equal(t, uint64(103), price)
 	require.Equal(t, uint64(1), totalQty)
 
-	_, _, ok = book.LevelAt(Sell, 2)
+	_, _, ok = c.Next()
 	require.False(t, ok)
 }

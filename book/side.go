@@ -76,9 +76,9 @@ func gallop(s []entry, bid bool, price uint64) (int, bool) {
 	return l, false
 }
 
-func (s *side) find(price uint64) (pos, bool) {
+func (s *side) find(price uint64) (pos, levels.LevelIndex, bool) {
 	if len(s.chain) == 0 {
-		return pos{0, 0}, false
+		return pos{0, 0}, -1, false
 	}
 
 	c := len(s.chain) - 1
@@ -86,7 +86,7 @@ func (s *side) find(price uint64) (pos, bool) {
 		var found bool
 		c, found = gallop(s.chain, s.bid, price)
 		if found {
-			return pos{c, 0}, true
+			return pos{c, 0}, levels.LevelIndex(s.blocks[s.chain[c].idx].entries[0].idx), true
 		}
 		if c > 0 {
 			c--
@@ -95,7 +95,10 @@ func (s *side) find(price uint64) (pos, bool) {
 
 	b := &s.blocks[s.chain[c].idx]
 	i, found := gallop(b.entries[:b.n], s.bid, price)
-	return pos{c, i}, found
+	if !found {
+		return pos{c, i}, -1, false
+	}
+	return pos{c, i}, levels.LevelIndex(b.entries[i].idx), true
 }
 
 func (s *side) insertAt(p pos, idx levels.LevelIndex, price uint64) {
@@ -153,17 +156,6 @@ func (s *side) removeAt(p pos) {
 
 func (s *side) at(p pos) levels.LevelIndex {
 	return levels.LevelIndex(s.blocks[s.chain[p.c].idx].entries[p.i].idx)
-}
-
-func (s *side) atDepth(depth int) (levels.LevelIndex, bool) {
-	for c := len(s.chain) - 1; c >= 0; c-- {
-		b := &s.blocks[s.chain[c].idx]
-		if depth < int(b.n) {
-			return levels.LevelIndex(b.entries[int(b.n)-1-depth].idx), true
-		}
-		depth -= int(b.n)
-	}
-	return -1, false
 }
 
 func (s *side) depth(out []levels.LevelIndex) int {

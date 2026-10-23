@@ -26,8 +26,8 @@ func modelFind(m []entry, bid bool, price uint64) (int, bool) {
 }
 
 // compareSide checks the side against the model and its own invariants:
-// flattened entries, chain keys, block fill, block arena size, best and
-// atDepth at every depth.
+// flattened entries, chain keys, block fill, block arena size, best,
+// cursor walk and depth.
 func compareSide(t *testing.T, s *side, m []entry) {
 	t.Helper()
 
@@ -49,14 +49,6 @@ func compareSide(t *testing.T, s *side, m []entry) {
 	if ok {
 		require.Equal(t, levels.LevelIndex(m[len(m)-1].idx), best)
 	}
-	for d := range m {
-		l, ok := s.atDepth(d)
-		require.True(t, ok, "depth %d", d)
-		require.Equal(t, levels.LevelIndex(m[len(m)-1-d].idx), l, "depth %d", d)
-	}
-	_, ok = s.atDepth(len(m))
-	require.False(t, ok)
-
 	cu, ok := s.cursor()
 	require.Equal(t, len(m) > 0, ok)
 	for d := len(m) - 1; d >= 0; d-- {
@@ -103,7 +95,7 @@ func runSideRandom(t *testing.T, bid bool, seed int64) {
 			if len(m) == 0 || rng.Intn(100) < ph.insertPct {
 				price := uint64(rng.Intn(10000) + 1)
 				mi, found := modelFind(m, bid, price)
-				p, ok := s.find(price)
+				p, _, ok := s.find(price)
 				require.Equal(t, found, ok, "step %d: find %d", step, price)
 				if found {
 					require.Equal(t, levels.LevelIndex(m[mi].idx), s.at(p), "step %d: find %d", step, price)
@@ -115,7 +107,7 @@ func runSideRandom(t *testing.T, bid bool, seed int64) {
 				m = append(m[:mi], append([]entry{e}, m[mi:]...)...)
 			} else {
 				mi := rng.Intn(len(m))
-				p, ok := s.find(m[mi].price)
+				p, _, ok := s.find(m[mi].price)
 				require.True(t, ok, "step %d: remove %d", step, m[mi].price)
 				require.Equal(t, levels.LevelIndex(m[mi].idx), s.at(p), "step %d: remove %d", step, m[mi].price)
 				s.removeAt(p)
@@ -128,7 +120,7 @@ func runSideRandom(t *testing.T, bid bool, seed int64) {
 		}
 	}
 	for len(m) > 0 {
-		p, ok := s.find(m[0].price)
+		p, _, ok := s.find(m[0].price)
 		require.True(t, ok)
 		s.removeAt(p)
 		m = m[1:]

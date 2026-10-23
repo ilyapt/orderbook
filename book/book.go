@@ -41,9 +41,9 @@ func (b *Book) Rest(s Side, h levels.Handle, price, qty uint64) error {
 	}
 	sd := b.side(s)
 
-	p, found := sd.find(price)
+	p, l, found := sd.find(price)
 	if found {
-		b.levels.Rest(h, sd.at(p), qty)
+		b.levels.Rest(h, l, qty)
 		return nil
 	}
 
@@ -65,12 +65,24 @@ func (b *Book) Add(s Side, seq, price, qty uint64) (levels.Handle, error) {
 	return h, nil
 }
 
-func (b *Book) LevelAt(s Side, depth int) (price, totalQty uint64, ok bool) {
-	l, ok := b.side(s).atDepth(depth)
-	if !ok {
+type Cursor struct {
+	b  *Book
+	cu cursor
+	ok bool
+}
+
+func (b *Book) Cursor(s Side) Cursor {
+	cu, ok := b.side(s).cursor()
+	return Cursor{b: b, cu: cu, ok: ok}
+}
+
+func (c *Cursor) Next() (price, totalQty uint64, ok bool) {
+	if !c.ok {
 		return 0, 0, false
 	}
-	return b.levels.Price(l), b.levels.TotalQty(l), true
+	l := c.cu.idx()
+	c.ok = c.cu.prev()
+	return c.b.levels.Price(l), c.b.levels.TotalQty(l), true
 }
 
 func (b *Book) Cancel(h levels.Handle) (uint64, error) {
@@ -131,16 +143,21 @@ func (b *Book) side(s Side) *side {
 func (b *Book) dropLevel(idx levels.LevelIndex) {
 	price := b.levels.Price(idx)
 
-	p, found := b.bids.find(price)
-	if found && b.bids.at(p) == idx {
-		b.bids.removeAt(p)
+	sd, other := &b.asks, &b.bids
+	if n := len(b.bids.chain); n > 0 && price <= b.bids.chain[n-1].price {
+		sd, other = &b.bids, &b.asks
+	}
+
+	p, l, found := sd.find(price)
+	if found && l == idx {
+		sd.removeAt(p)
 		b.levels.FreeLevel(idx)
 		return
 	}
 
-	p, found = b.asks.find(price)
-	if found && b.asks.at(p) == idx {
-		b.asks.removeAt(p)
+	p, l, found = other.find(price)
+	if found && l == idx {
+		other.removeAt(p)
 		b.levels.FreeLevel(idx)
 		return
 	}
