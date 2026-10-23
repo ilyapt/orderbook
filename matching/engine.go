@@ -55,15 +55,16 @@ func (e *Engine) Place(order Order) (Report, error) {
 
 	switch order.TIF {
 	case PostOnly:
-		if price, _, ok := e.book.LevelAt(opp, 0); ok && crossed(order, price) {
+		if price, _, ok := e.book.Best(opp); ok && crossed(order, price) {
 			e.book.Release(taker)
 			report.Status = Rejected
 			return report, nil
 		}
 	case FOK:
 		var available uint64
-		for depth := 0; available < order.Qty; depth++ {
-			price, totalQty, ok := e.book.LevelAt(opp, depth)
+		c := e.book.Cursor(opp)
+		for available < order.Qty {
+			price, totalQty, ok := c.Next()
 			if !ok || !crossed(order, price) {
 				e.book.Release(taker)
 				report.Status = Rejected
