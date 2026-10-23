@@ -41,15 +41,15 @@ func (b *Book) Rest(s Side, h levels.Handle, price, qty uint64) error {
 	}
 	sd := b.side(s)
 
-	i, found := sd.find(price)
+	p, found := sd.find(price)
 	if found {
-		b.levels.Rest(h, levels.LevelIndex(sd.levels[i].idx), qty)
+		b.levels.Rest(h, sd.at(p), qty)
 		return nil
 	}
 
 	lvl := b.levels.NewLevel(price)
 	b.levels.Rest(h, lvl, qty)
-	sd.insertAt(i, lvl, price)
+	sd.insertAt(p, lvl, price)
 	return nil
 }
 
@@ -66,12 +66,10 @@ func (b *Book) Add(s Side, seq, price, qty uint64) (levels.Handle, error) {
 }
 
 func (b *Book) LevelAt(s Side, depth int) (price, totalQty uint64, ok bool) {
-	sd := b.side(s)
-	i := len(sd.levels) - 1 - depth
-	if i < 0 {
+	l, ok := b.side(s).atDepth(depth)
+	if !ok {
 		return 0, 0, false
 	}
-	l := levels.LevelIndex(sd.levels[i].idx)
 	return b.levels.Price(l), b.levels.TotalQty(l), true
 }
 
@@ -133,16 +131,16 @@ func (b *Book) side(s Side) *side {
 func (b *Book) dropLevel(idx levels.LevelIndex) {
 	price := b.levels.Price(idx)
 
-	i, found := b.bids.find(price)
-	if found && b.bids.levels[i].idx == int32(idx) {
-		b.bids.removeAt(i)
+	p, found := b.bids.find(price)
+	if found && b.bids.at(p) == idx {
+		b.bids.removeAt(p)
 		b.levels.FreeLevel(idx)
 		return
 	}
 
-	i, found = b.asks.find(price)
-	if found && b.asks.levels[i].idx == int32(idx) {
-		b.asks.removeAt(i)
+	p, found = b.asks.find(price)
+	if found && b.asks.at(p) == idx {
+		b.asks.removeAt(p)
 		b.levels.FreeLevel(idx)
 		return
 	}
