@@ -6,7 +6,7 @@ import (
 	"orderbook/levels"
 )
 
-const blockCap = 256
+const blockCap = 128
 
 type block struct {
 	n       int32
@@ -81,12 +81,16 @@ func (s *side) find(price uint64) (pos, bool) {
 		return pos{0, 0}, false
 	}
 
-	c, found := gallop(s.chain, s.bid, price)
-	if found {
-		return pos{c, 0}, true
-	}
-	if c > 0 {
-		c--
+	c := len(s.chain) - 1
+	if key := s.chain[c].price; (s.bid && price < key) || (!s.bid && price > key) {
+		var found bool
+		c, found = gallop(s.chain, s.bid, price)
+		if found {
+			return pos{c, 0}, true
+		}
+		if c > 0 {
+			c--
+		}
 	}
 
 	b := &s.blocks[s.chain[c].idx]
@@ -160,6 +164,53 @@ func (s *side) atDepth(depth int) (levels.LevelIndex, bool) {
 		depth -= int(b.n)
 	}
 	return -1, false
+}
+
+func (s *side) depth(out []levels.LevelIndex) int {
+	d := 0
+	for c := len(s.chain) - 1; c >= 0 && d < len(out); c-- {
+		b := &s.blocks[s.chain[c].idx]
+		es := b.entries[:b.n]
+		for j := len(es) - 1; j >= 0 && d < len(out); j-- {
+			out[d] = levels.LevelIndex(es[j].idx)
+			d++
+		}
+	}
+	return d
+}
+
+type cursor struct {
+	s *side
+	b *block
+	c int
+	i int
+}
+
+func (s *side) cursor() (cursor, bool) {
+	c := len(s.chain) - 1
+	if c < 0 {
+		return cursor{}, false
+	}
+	b := &s.blocks[s.chain[c].idx]
+	return cursor{s: s, b: b, c: c, i: int(b.n) - 1}, true
+}
+
+func (cu *cursor) idx() levels.LevelIndex {
+	return levels.LevelIndex(cu.b.entries[cu.i].idx)
+}
+
+func (cu *cursor) prev() bool {
+	if cu.i > 0 {
+		cu.i--
+		return true
+	}
+	if cu.c == 0 {
+		return false
+	}
+	cu.c--
+	cu.b = &cu.s.blocks[cu.s.chain[cu.c].idx]
+	cu.i = int(cu.b.n) - 1
+	return true
 }
 
 func (s *side) best() (levels.LevelIndex, bool) {

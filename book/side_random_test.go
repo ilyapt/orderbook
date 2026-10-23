@@ -56,6 +56,25 @@ func compareSide(t *testing.T, s *side, m []entry) {
 	}
 	_, ok = s.atDepth(len(m))
 	require.False(t, ok)
+
+	cu, ok := s.cursor()
+	require.Equal(t, len(m) > 0, ok)
+	for d := len(m) - 1; d >= 0; d-- {
+		require.True(t, ok, "cursor at %d", d)
+		require.Equal(t, levels.LevelIndex(m[d].idx), cu.idx(), "cursor at %d", d)
+		ok = cu.prev()
+	}
+	require.False(t, ok)
+
+	out := make([]levels.LevelIndex, len(m)+1)
+	require.Equal(t, len(m), s.depth(out))
+	for d := range m {
+		require.Equal(t, levels.LevelIndex(m[len(m)-1-d].idx), out[d], "depth %d", d)
+	}
+	if len(m) > 3 {
+		require.Equal(t, 3, s.depth(out[:3]))
+		require.Equal(t, levels.LevelIndex(m[len(m)-3].idx), out[2])
+	}
 }
 
 func TestSideRandomAgainstModel(t *testing.T) {
